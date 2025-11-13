@@ -18,6 +18,7 @@ class CreateTaskTable extends Migration
             'title' => [
                 'type'       => 'VARCHAR',
                 'constraint' => '150',
+                'unique'     => true,
             ],
             'description' => [
                 'type' => 'TEXT',
@@ -27,12 +28,22 @@ class CreateTaskTable extends Migration
                 'type'       => 'BOOLEAN',
                 'default'    => false,
             ],
-             // Chave Estrangeira: Conecta a tarefa a uma pessoa
+            // Chave Estrangeira: Conecta a tarefa a uma pessoa
             'user_id' => [
                 'type'       => 'INT',
                 'constraint' => 11,
                 'unsigned'   => true,
                 'null'       => false,
+            ],
+            'category_id' => [
+                'type'       => 'INT',
+                'constraint' => 5,
+                'unsigned'   => true,
+                'null'       => false,
+            ],
+            'due_date' => [
+                'type' => 'DATETIME',
+                'null' => true,
             ],
             'created_at' => [
                 'type' => 'DATETIME',
@@ -46,6 +57,8 @@ class CreateTaskTable extends Migration
         $this->forge->addKey('id', true);
         $this->forge->addKey('user_id'); // Índice para a chave estrangeira
         $this->forge->addForeignKey('user_id', 'users', 'id', 'CASCADE', 'CASCADE');
+        $this->forge->addKey('category_id'); // Índice para a chave estrangeira
+        $this->forge->addForeignKey('category_id', 'categories', 'id', 'CASCADE', 'CASCADE');
 
         $this->forge->createTable('tasks');
     }
