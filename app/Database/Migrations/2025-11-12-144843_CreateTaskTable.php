@@ -34,6 +34,16 @@ class CreateTaskTable extends Migration
                 'unsigned'   => true,
                 'null'       => false,
             ],
+            'category_id' => [
+                'type'       => 'INT',
+                'constraint' => 5,
+                'unsigned'   => true,
+                'null'       => false,
+            ],
+            'due_date' => [ //vencimento
+                'type' => 'DATETIME',
+                'null' => true,
+            ],
             'created_at' => [
                 'type' => 'DATETIME',
                 'null' => true,
@@ -46,6 +56,9 @@ class CreateTaskTable extends Migration
         $this->forge->addKey('id', true);
         $this->forge->addKey('user_id'); // Índice para a chave estrangeira
         $this->forge->addForeignKey('user_id', 'users', 'id', 'CASCADE', 'CASCADE');
+        $this->forge->addKey('category_id'); // Índice para a chave estrangeira
+        $this->forge->addForeignKey('category_id', 'categories', 'id', 'CASCADE', 'CASCADE');
+        $this->forge->addUniqueKey(['user_id', 'title']); // Evita tarefas com mesmo título para o mesmo usuário
 
         $this->forge->createTable('tasks');
     }
