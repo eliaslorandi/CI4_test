@@ -1,6 +1,4 @@
-<?php
-
-namespace App\Database\Migrations;
+<?php namespace App\Database\Migrations;
 
 use CodeIgniter\Database\Migration;
 
@@ -29,7 +27,7 @@ class CreateCategoryTable extends Migration
                 'null' => true,
             ],
         ]);
-
+        
         $this->forge->addKey('id', true);
         $this->forge->createTable('categories');
     }
