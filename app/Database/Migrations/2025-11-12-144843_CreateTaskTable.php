@@ -18,7 +18,7 @@ class CreateTaskTable extends Migration
             'title' => [
                 'type'       => 'VARCHAR',
                 'constraint' => '150',
-                'unique'     => true,
+                'unique'     => false,
             ],
             'description' => [
                 'type' => 'TEXT',
@@ -37,7 +37,7 @@ class CreateTaskTable extends Migration
             ],
             'category_id' => [
                 'type'       => 'INT',
-                'constraint' => 5,
+                'constraint' => 11,
                 'unsigned'   => true,
                 'null'       => false,
             ],
