@@ -1,18 +1,16 @@
-<?php
-
-namespace App\Models;
+<?php namespace App\Models;
 
 use CodeIgniter\Model;
 
 class CategoryModel extends Model
 {
-    protected $table            = 'categories';
-    protected $primaryKey       = 'id';
-    protected $useAutoIncrement = true;
-    protected $returnType       = 'array';
-    protected $useSoftDeletes   = false;
-    protected $protectFields    = true;
-    protected $allowedFields    = ['name'];
+    protected $table              = 'categories';
+    protected $primaryKey         = 'id';
+    protected $useAutoIncrement   = true;
+    protected $returnType         = 'array';
+    protected $useSoftDeletes     = false;
+    protected $protectFields      = true;
+    protected $allowedFields      = ['name'];
 
     protected bool $allowEmptyInserts = false;
     protected bool $updateOnlyChanged = true;
@@ -25,17 +23,18 @@ class CategoryModel extends Model
     protected $dateFormat    = 'datetime';
     protected $createdField  = 'created_at';
     protected $updatedField  = 'updated_at';
-    protected $deletedField  = 'deleted_at';
+    protected $deletedField  = 'deleted_at'; // Mesmo que useSoftDeletes seja false
 
     // Validation
     protected $validationRules      = [
-        'name' => 'required|string|max_length[100]|is_unique[categories.name]',
+        'name' => 'required|string|max_length[100]|is_unique[categories.name,id,{id}]|min_length[3]',
     ];
     protected $validationMessages   = [
         'name' => [
-            'required' => 'O nome da categoria é obrigatório.',
+            'required'   => 'O nome da categoria é obrigatório.',
+            'min_length' => 'O nome deve ter pelo menos 3 caracteres.',
             'max_length' => 'O nome não pode exceder 100 caracteres.',
-            'is_unique' => 'Esta categoria já existe.',
+            'is_unique'  => 'Esta categoria já existe.',
         ],
     ];
     protected $skipValidation       = false;
@@ -51,47 +50,32 @@ class CategoryModel extends Model
     protected $afterFind      = [];
     protected $beforeDelete   = [];
     protected $afterDelete    = [];
-
-
-
-
-
-
-
-
-
     
-    /**
-     * Get all categories with their tasks count
-     */
+    // --- Métodos de Consulta ---
+
     public function getCategoriesWithTasksCount()
     {
+        // Esta consulta é ideal para exibir a lista de categorias.
         return $this->select('categories.*, COUNT(tasks.id) as tasks_count')
             ->join('tasks', 'tasks.category_id = categories.id', 'left')
             ->groupBy('categories.id')
+            ->orderBy('categories.name', 'ASC')
             ->findAll();
     }
 
-    /**
-     * Get category with all tasks
-     */
     public function getCategoryWithTasks(int $categoryId)
     {
         $category = $this->find($categoryId);
         if ($category) {
-            $taskModel = new TaskModel();
-            $category['tasks'] = $taskModel->where('category_id', $categoryId)->findAll();
+            // Instancia o TaskModel para buscar as tarefas associadas
+            $taskModel = model('TaskModel'); 
+            $category['tasks'] = $taskModel->getTasksByCategory($categoryId);
         }
         return $category;
     }
 
-    /**
-     * Find category by name
-     */
     public function getByName(string $name)
     {
         return $this->where('name', $name)->first();
     }
 }
-
-
