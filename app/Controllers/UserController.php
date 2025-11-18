@@ -1,6 +1,4 @@
-<?php
-
-namespace App\Controllers;
+<?php namespace App\Controllers;
 
 use App\Controllers\BaseController;
 use App\Models\UserModel;
@@ -13,8 +11,8 @@ class UserController extends BaseController
 
     public function __construct()
     {
-        $this->userModel = new UserModel();
-        $this->session = session();
+        $this->session = \Config\Services::session();
+        $this->userModel = model('UserModel');
     }
 
     public function register()
@@ -36,11 +34,11 @@ class UserController extends BaseController
 
         $passwordConfirm = $this->request->getPost('password_confirm');
         if ($data['password'] !== $passwordConfirm) {
-            return redirect()->back()->with('error', 'As senhas não conferem.');
+            return redirect()->back()->withInput()->with('error', 'As senhas não conferem.');
         }
 
         if ($this->userModel->save($data)) {
-            return redirect()->to('/user/login')->with('success', 'Usuário registrado com sucesso!');
+            return redirect()->to(url_to('UserController::login'))->with('success', 'Usuário registrado com sucesso! Faça login.');
         } else {
             $errors = $this->userModel->errors();
             return redirect()->back()->withInput()->with('errors', $errors);
@@ -49,6 +47,10 @@ class UserController extends BaseController
 
     public function login()
     {
+        if ($this->session->get('logged_in')) {
+            return redirect()->to('/dashboard');
+        }
+        
         if ($this->request->getMethod() === 'post') {
             return $this->storeLogin();
         }
@@ -60,40 +62,55 @@ class UserController extends BaseController
     {
         $email = $this->request->getPost('email');
         $password = $this->request->getPost('password');
+        $remember = $this->request->getPost('remember'); //checkbox Lembrar-me
 
         $user = $this->userModel->findByEmail($email);
 
-        if (!$user) {
-            return redirect()->back()->with('error', 'Email ou senha incorretos.');
+        if (!$user || !$this->userModel->verifyPassword($password, $user['password'])) {
+            return redirect()->back()->withInput()->with('error', 'Email ou senha incorretos.');
         }
 
-        if (!$this->userModel->verifyPassword($password, $user['password'])) {
-            return redirect()->back()->with('error', 'Email ou senha incorretos.');
-        }
-
-        $this->session->set([
-            'user_id'   => $user['id'],
-            'user_name' => $user['name'],
+        $sessionData = [
+            'user_id'    => $user['id'],
+            'user_name'  => $user['name'],
             'user_email' => $user['email'],
-            'logged_in' => true,
-        ]);
+            'logged_in'  => true,
+        ];
+        $this->session->set($sessionData);
 
-        return redirect()->to('/dashboard')->with('success', 'Bem-vindo ' . $user['name'] . '!');
+        if ($remember) {
+            $token = bin2hex(random_bytes(32)); 
+            $this->userModel->update($user['id'], ['remember_token' => $token]);
+
+            //cookie persistente por 30 dias
+            $cookieDuration = 3600 * 24 * 30;
+            setcookie('remember_user_token', $token, time() + $cookieDuration, '/');
+        }
+        
+        return redirect()->to('/dashboard')->with('success', 'Bem-vindo(a) ' . $user['name'] . '!');
     }
 
     public function logout()
     {
+        // Se o usuário tinha um cookie "Lembrar-me", ele deve ser removido.
+        if (isset($_COOKIE['remember_user_token'])) {
+            //O user_id deve estar na sessão para que esta linha funcione
+            $this->userModel->update($this->session->get('user_id'), ['remember_token' => null]);
+            
+            // Remove o cookie do navegador
+            setcookie('remember_user_token', '', time() - 3600, '/');
+        }
+        
         $this->session->destroy();
-        return redirect()->to('/user/login')->with('success', 'Você foi desconectado.');
+        return redirect()->to(url_to('UserController::login'))->with('success', 'Você foi desconectado.');
     }
 
-    //verificação de autenticação
+    // Métodos abaixo serão protegidos pelo AuthFilter
+    
     public function profile()
     {
-        if (!$this->session->get('logged_in')) {
-            return redirect()->to('/user/login');
-        }
-
+        // VERIFICAÇÃO DE AUTENTICAÇÃO REMOVIDA PELO AuthFilter
+        
         $userId = $this->session->get('user_id');
         $user = $this->userModel->find($userId);
 
@@ -102,10 +119,6 @@ class UserController extends BaseController
 
     public function edit()
     {
-        if (!$this->session->get('logged_in')) {
-            return redirect()->to('/user/login');
-        }
-
         $userId = $this->session->get('user_id');
         $user = $this->userModel->find($userId);
 
@@ -114,10 +127,6 @@ class UserController extends BaseController
 
     public function update()
     {
-        if (!$this->session->get('logged_in')) {
-            return redirect()->to('/user/login');
-        }
-
         $userId = $this->session->get('user_id');
 
         $data = [
@@ -132,6 +141,7 @@ class UserController extends BaseController
             if ($this->request->getPost('password') !== $passwordConfirm) {
                 return redirect()->back()->with('error', 'As senhas não conferem.');
             }
+            // A senha será hasheada automaticamente no Model (hook beforeUpdate)
             $data['password'] = $this->request->getPost('password');
         }
 
@@ -142,7 +152,7 @@ class UserController extends BaseController
                 'user_email' => $data['email'],
             ]);
 
-            return redirect()->to('/user/profile')->with('success', 'Perfil atualizado com sucesso!');
+            return redirect()->to(url_to('UserController::profile'))->with('success', 'Perfil atualizado com sucesso!');
         } else {
             $errors = $this->userModel->errors();
             return redirect()->back()->withInput()->with('errors', $errors);
@@ -151,21 +161,23 @@ class UserController extends BaseController
 
     public function delete()
     {
-        if (!$this->session->get('logged_in')) {
-            return redirect()->to('/user/login');
-        }
-
         $userId = $this->session->get('user_id');
         $password = $this->request->getPost('password');
 
         $user = $this->userModel->find($userId);
-
+        
         if (!$this->userModel->verifyPassword($password, $user['password'])) {
             return redirect()->back()->with('error', 'Senha incorreta.');
         }
 
         if ($this->userModel->delete($userId)) {
             $this->session->destroy();
+            
+            // Remove o cookie "Lembrar-me" se existir
+            if (isset($_COOKIE['remember_user_token'])) {
+                setcookie('remember_user_token', '', time() - 3600, '/');
+            }
+            
             return redirect()->to('/')->with('success', 'Conta deletada com sucesso.');
         } else {
             return redirect()->back()->with('error', 'Erro ao deletar conta.');
