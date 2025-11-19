@@ -4,40 +4,45 @@ use CodeIgniter\Model;
 
 class CategoryModel extends Model
 {
-    protected $table              = 'categories';
-    protected $primaryKey         = 'id';
-    protected $useAutoIncrement   = true;
-    protected $returnType         = 'array';
-    protected $useSoftDeletes     = false;
-    protected $protectFields      = true;
-    protected $allowedFields      = ['name'];
+    protected $table          = 'categories';
+    protected $primaryKey     = 'id';
+    protected $useAutoIncrement = true;
+    protected $returnType     = 'array';
+    protected $useSoftDeletes = false;
+    protected $protectFields  = true;
+    
+    // CORREÇÃO: Adicionamos 'user_id' e 'color_code' para salvar a posse e o dado opcional
+    protected $allowedFields  = ['user_id', 'name', 'color_code']; 
 
     protected bool $allowEmptyInserts = false;
     protected bool $updateOnlyChanged = true;
-
-    protected array $casts = [];
-    protected array $castHandlers = [];
 
     // Dates
     protected $useTimestamps = true;
     protected $dateFormat    = 'datetime';
     protected $createdField  = 'created_at';
     protected $updatedField  = 'updated_at';
-    protected $deletedField  = 'deleted_at'; // Mesmo que useSoftDeletes seja false
+    protected $deletedField  = 'deleted_at';
 
     // Validation
-    protected $validationRules      = [
-        'name' => 'required|string|max_length[100]|is_unique[categories.name,id,{id}]|min_length[3]',
+    protected $validationRules = [
+        'user_id'    => 'required|integer', 
+        'name'       => 'required|string|max_length[100]|min_length[3]|is_unique[categories.name,id,{id},user_id,{user_id}]', 
+        'color_code' => 'permit_empty|max_length[7]', // Ex: #FFFFFF (7 caracteres)
     ];
-    protected $validationMessages   = [
+    
+    protected $validationMessages = [
+        'user_id' => [
+            'required' => 'O ID do usuário é obrigatório.',
+        ],
         'name' => [
             'required'   => 'O nome da categoria é obrigatório.',
             'min_length' => 'O nome deve ter pelo menos 3 caracteres.',
             'max_length' => 'O nome não pode exceder 100 caracteres.',
-            'is_unique'  => 'Esta categoria já existe.',
+            'is_unique'  => 'Você já possui uma categoria com este nome.',
         ],
     ];
-    protected $skipValidation       = false;
+    protected $skipValidation     = false;
     protected $cleanValidationRules = true;
 
     // Callbacks
@@ -53,29 +58,53 @@ class CategoryModel extends Model
     
     // --- Métodos de Consulta ---
 
-    public function getCategoriesWithTasksCount()
+    /**
+     * Retorna categorias do usuário com a contagem de tarefas.
+     * @param int $userId O ID do usuário logado.
+     * @return array
+     */
+    public function getCategoriesWithTasksCount(int $userId)
     {
-        // Esta consulta é ideal para exibir a lista de categorias.
+        // FILTRO DE AUTORIZAÇÃO: Filtra apenas as categorias do usuário.
         return $this->select('categories.*, COUNT(tasks.id) as tasks_count')
             ->join('tasks', 'tasks.category_id = categories.id', 'left')
+            ->where('categories.user_id', $userId) // Filtro crucial
             ->groupBy('categories.id')
             ->orderBy('categories.name', 'ASC')
             ->findAll();
     }
 
-    public function getCategoryWithTasks(int $categoryId)
+    /**
+     * Retorna uma categoria específica e suas tarefas.
+     * @param int $categoryId O ID da categoria.
+     * @param int $userId O ID do usuário logado (para autorização).
+     * @return array|null
+     */
+    public function getCategoryWithTasks(int $categoryId, int $userId)
     {
-        $category = $this->find($categoryId);
+        $category = $this->where('id', $categoryId)
+                         ->where('user_id', $userId)
+                         ->first();
+                         
         if ($category) {
-            // Instancia o TaskModel para buscar as tarefas associadas
             $taskModel = model('TaskModel'); 
-            $category['tasks'] = $taskModel->getTasksByCategory($categoryId);
+            $category['tasks'] = $taskModel->where('category_id', $categoryId)
+                                            ->where('user_id', $userId)
+                                            ->findAll();
         }
         return $category;
     }
 
-    public function getByName(string $name)
+    /**
+     * Retorna uma categoria pelo nome, garantindo que pertença ao usuário.
+     * @param string $name O nome da categoria.
+     * @param int $userId O ID do usuário logado.
+     * @return array|null
+     */
+    public function getByName(string $name, int $userId)
     {
-        return $this->where('name', $name)->first();
+        return $this->where('name', $name)
+                    ->where('user_id', $userId)
+                    ->first();
     }
 }

@@ -8,25 +8,25 @@ use CodeIgniter\HTTP\ResponseInterface;
 
 class CategoryController extends BaseController
 {
+    /**
+     * @var CategoryModel
+     */
     protected $categoryModel;
-    protected $session;
 
     public function __construct()
     {
-        $this->categoryModel = new CategoryModel();
-        $this->session = session();
+        $this->categoryModel = model(CategoryModel::class);
     }
 
     /**
-     * Get all categories as JSON
+     * Lista todas as categorias pertencentes ao usuário logado.
+     * @return ResponseInterface
      */
-    public function index()
+    public function index(): ResponseInterface
     {
-        if (!$this->session->get('logged_in')) {
-            return $this->response->setJSON(['error' => 'Não autenticado'])->setStatusCode(401);
-        }
+        $userId = session()->get('user_id');
 
-        $categories = $this->categoryModel->findAll();
+        $categories = $this->categoryModel->getCategoriesWithTasksCount($userId);
 
         return $this->response->setJSON([
             'success' => true,
@@ -35,153 +35,130 @@ class CategoryController extends BaseController
     }
 
     /**
-     * Get categories for dropdown/select
+     * Armazena uma nova categoria no banco de dados, associando-a ao usuário logado.
+     * @return ResponseInterface
      */
-    public function getCategories()
+    public function store(): ResponseInterface
     {
-        if (!$this->session->get('logged_in')) {
-            return $this->response->setJSON(['error' => 'Não autenticado'])->setStatusCode(401);
-        }
-
-        $categories = $this->categoryModel->findAll();
-
-        return $this->response->setJSON([
-            'success' => true,
-            'data' => $categories,
-        ]);
-    }
-
-    /**
-     * Show create category form
-     */
-    public function create()
-    {
-        if (!$this->session->get('logged_in')) {
-            return redirect()->to('/user/login');
-        }
-
-        if ($this->request->getMethod() === 'post') {
-            return $this->store();
-        }
-
-        return view('categories/create');
-    }
-
-    /**
-     * Store new category
-     */
-    public function store()
-    {
-        if (!$this->session->get('logged_in')) {
-            return redirect()->to('/user/login');
-        }
-
+        $userId = session()->get('user_id');
+        
+        // Coleta dados compatível com Post e JSON/API
         $data = [
-            'name' => $this->request->getPost('name') ?? $this->request->getJSON('name'),
+            'user_id'    => $userId, // CRUCIAL para a segurança e validação
+            'name'       => $this->request->getPost('name') ?? $this->request->getJSON('name'),
+            'color_code' => $this->request->getPost('color_code') ?? $this->request->getJSON('color_code'),
         ];
-
+        
         if ($this->categoryModel->save($data)) {
-            // Se for AJAX, retorna JSON
+            $categoryId = $this->categoryModel->getInsertID();
+
+            // Resposta JSON para API/AJAX (Retorna o novo objeto completo)
             if ($this->request->isAJAX()) {
                 return $this->response->setJSON([
                     'success' => true,
                     'message' => 'Categoria criada com sucesso!',
-                    'data' => ['id' => $this->categoryModel->getInsertID(), 'name' => $data['name']],
+                    'data' => $this->categoryModel->find($categoryId),
                 ]);
             }
-            // Caso contrário, redireciona
+            
             return redirect()->back()->with('success', 'Categoria criada com sucesso!');
         } else {
-            // Se for AJAX, retorna erro JSON
+            // Tratamento de Erro de Validação (Status 422 - Unprocessable Entity)
+            $errors = $this->categoryModel->errors();
+            
             if ($this->request->isAJAX()) {
                 return $this->response->setJSON([
                     'success' => false,
-                    'errors' => $this->categoryModel->errors(),
+                    'errors' => $errors,
                 ])->setStatusCode(422);
             }
-            // Caso contrário, redireciona com erro
-            return redirect()->back()->withInput()->with('errors', $this->categoryModel->errors());
+            
+            return redirect()->back()->withInput()->with('errors', $errors);
         }
     }
 
     /**
-     * Show edit category form
+     * Exibe uma categoria específica, garantindo a posse.
+     * @param int $id ID da categoria.
+     * @return ResponseInterface
      */
-    public function edit(int $id)
+    public function show(int $id): ResponseInterface
     {
-        if (!$this->session->get('logged_in')) {
-            return redirect()->to('/user/login');
-        }
-
-        $category = $this->categoryModel->find($id);
+        $userId = session()->get('user_id');
+        
+        $category = $this->categoryModel
+            ->where('id', $id)
+            ->where('user_id', $userId) 
+            ->first();
 
         if (!$category) {
-            return redirect()->back()->with('error', 'Categoria não encontrada.');
+            return $this->response->setJSON(['error' => 'Categoria não encontrada ou acesso negado.'])->setStatusCode(404);
         }
 
-        if ($this->request->getMethod() === 'post') {
-            return $this->update($id);
-        }
-
-        return view('categories/edit', ['category' => $category]);
+        return $this->response->setJSON([
+            'success' => true,
+            'data' => $category
+        ]);
     }
 
+
     /**
-     * Update category
+     * Atualiza uma categoria existente, garantindo a posse.
+     * @param int $id ID da categoria.
+     * @return ResponseInterface
      */
-    public function update(int $id)
+    public function update(int $id): ResponseInterface
     {
-        if (!$this->session->get('logged_in')) {
-            return redirect()->to('/user/login');
-        }
+        $userId = session()->get('user_id');
 
-        $category = $this->categoryModel->find($id);
+        $existingCategory = $this->categoryModel
+            ->where('id', $id)
+            ->where('user_id', $userId)
+            ->first();
 
-        if (!$category) {
-            return redirect()->back()->with('error', 'Categoria não encontrada.');
+        if (!$existingCategory) {
+            return $this->response->setJSON(['error' => 'Categoria não encontrada ou acesso negado.'])->setStatusCode(404);
         }
 
         $data = [
-            'id'   => $id,
-            'name' => $this->request->getPost('name') ?? $this->request->getJSON('name'),
+            'id'            => $id,
+            'user_id'       => $userId,
+            'name'          => $this->request->getPost('name') ?? $this->request->getJSON('name'),
+            'color_code'    => $this->request->getPost('color_code') ?? $this->request->getJSON('color_code'),
         ];
-
+        
         if ($this->categoryModel->save($data)) {
-            // Se for AJAX, retorna JSON
-            if ($this->request->isAJAX()) {
-                return $this->response->setJSON([
-                    'success' => true,
-                    'message' => 'Categoria atualizada com sucesso!',
-                ]);
-            }
-            // Caso contrário, redireciona
-            return redirect()->back()->with('success', 'Categoria atualizada com sucesso!');
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => 'Categoria atualizada com sucesso!',
+                'data' => $this->categoryModel->find($id),
+            ]);
         } else {
-            // Se for AJAX, retorna erro JSON
-            if ($this->request->isAJAX()) {
-                return $this->response->setJSON([
-                    'success' => false,
-                    'errors' => $this->categoryModel->errors(),
-                ])->setStatusCode(422);
-            }
-            // Caso contrário, redireciona com erro
-            return redirect()->back()->withInput()->with('errors', $this->categoryModel->errors());
+            $errors = $this->categoryModel->errors();
+            
+            return $this->response->setJSON([
+                'success' => false,
+                'errors' => $errors,
+            ])->setStatusCode(422);
         }
     }
 
     /**
-     * Delete category (via AJAX/API)
+     * Deleta uma categoria específica, garantindo a posse.
+     * @param int $id ID da categoria.
+     * @return ResponseInterface
      */
-    public function delete(int $id)
+    public function delete(int $id): ResponseInterface
     {
-        if (!$this->session->get('logged_in')) {
-            return $this->response->setJSON(['error' => 'Não autenticado'])->setStatusCode(401);
-        }
+        $userId = session()->get('user_id');
 
-        $category = $this->categoryModel->find($id);
+        $category = $this->categoryModel
+            ->where('id', $id)
+            ->where('user_id', $userId)
+            ->first();
 
         if (!$category) {
-            return $this->response->setJSON(['error' => 'Categoria não encontrada'])->setStatusCode(404);
+            return $this->response->setJSON(['error' => 'Categoria não encontrada ou acesso negado.'])->setStatusCode(404);
         }
 
         if ($this->categoryModel->delete($id)) {
