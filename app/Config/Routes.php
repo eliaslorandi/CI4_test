@@ -5,6 +5,7 @@ use CodeIgniter\Router\RouteCollection;
 /**
  * @var RouteCollection $routes
  */
-$routes->get('/', function(){
-    echo "<h1>Welcome to CodeIgniter 4!</h1>";
+$routes->group('/', ['filter' => 'auth'], function($routes) {
+    // Esta rota só será acessada se o usuário estiver logado
+    $routes->get('dashboard', 'DashboardController::index');
 });
