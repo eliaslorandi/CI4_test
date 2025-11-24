@@ -44,7 +44,7 @@ class AuthFilter implements FilterInterface
 
         // 3. NÃO ESTÁ LOGADO NEM FOI LEMBRADO: Redireciona para o login
         session()->setFlashdata('error', 'Você precisa estar logado para acessar esta página.');
-        return redirect()->to(url_to('UserController::login'));
+        return redirect()->to(url_to('AuthController::login'));
     }
 
     /**
