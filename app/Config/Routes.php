@@ -11,7 +11,7 @@ use CodeIgniter\Router\RouteCollection;
  */
 
 // ROTAS PÚBLICAS
-$routes->get('/', 'WelcomeController::index');
+$routes->get('/', 'HomeController::index');
 
 // Autenticação (públicas)
 $routes->get('/auth/register', 'AuthController::register');
@@ -21,7 +21,10 @@ $routes->post('/auth/login', 'AuthController::login');
 $routes->get('/auth/logout', 'AuthController::logout');
 
 // ROTAS PROTEGIDAS
-$routes->group('', ['filter' => 'auth'], function($routes) {
+$routes->group('', ['filter' => 'authFilter'], function($routes) {
+    
+    // Dashboard
+    $routes->get('/dashboard', 'DashboardController::index');
     
     // User routes
     $routes->get('/user/profile', 'UserController::profile');
