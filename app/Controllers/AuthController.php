@@ -17,7 +17,7 @@ class AuthController extends BaseController
 
     public function register()
     {
-        if ($this->request->getMethod() === 'post') {
+        if ($this->request->getMethod() === 'POST' || strtoupper($this->request->getMethod()) === 'POST') {
             return $this->storeRegister();
         }
 
@@ -26,22 +26,65 @@ class AuthController extends BaseController
 
     private function storeRegister()
     {
-        $data = [
-            'name'     => $this->request->getPost('name'),
-            'email'    => $this->request->getPost('email'),
-            'password' => $this->request->getPost('password'),
-        ];
+        try {
+            $this->response->setHeader('Content-Type', 'application/json');
 
-        $passwordConfirm = $this->request->getPost('password_confirm');
-        if ($data['password'] !== $passwordConfirm) {
-            return redirect()->back()->withInput()->with('error', 'As senhas não conferem.');
-        }
+            $data = [
+                'name'     => $this->request->getPost('name'),
+                'email'    => $this->request->getPost('email'),
+                'password' => $this->request->getPost('password'),
+            ];
 
-        if ($this->userModel->save($data)) {
-            return redirect()->to(url_to('AuthController::login'))->with('success', 'Usuário registrado com sucesso! Faça login.');
-        } else {
-            $errors = $this->userModel->errors();
-            return redirect()->back()->withInput()->with('errors', $errors);
+            $passwordConfirm = $this->request->getPost('password_confirm');
+            if ($data['password'] !== $passwordConfirm) {
+                log_message('debug', 'Password mismatch detected');
+                return $this->response->setStatusCode(422)->setJSON([
+                    'success' => false,
+                    'errors' => [
+                        'password_confirm' => 'As senhas não conferem.'
+                    ]
+                ]);
+            }
+
+            if (!$this->userModel->validate($data)) {
+                $errors = $this->userModel->errors();
+                log_message('error', 'Validation errors: ' . json_encode($errors));
+                return $this->response->setStatusCode(422)->setJSON([
+                    'success' => false,
+                    'errors' => $errors
+                ]);
+            }
+
+            if ($this->userModel->save($data)) {
+                log_message('info', 'User registered: ' . $data['email']);
+                
+                $user = $this->userModel->findByEmail($data['email']);
+                $this->session->set([
+                    'logged_in' => true,
+                    'user_id' => $user['id'],
+                    'user_email' => $user['email'],
+                    'user_name' => $user['name']
+                ]);
+                
+                return $this->response->setStatusCode(200)->setJSON([
+                    'success' => true,
+                    'message' => 'Usuário registrado com sucesso!',
+                    'redirect' => '/dashboard'
+                ]);
+            } else {
+                $errors = $this->userModel->errors();
+                log_message('error', 'Save error: ' . json_encode($errors));
+                return $this->response->setStatusCode(500)->setJSON([
+                    'success' => false,
+                    'errors' => $errors ?? ['general' => 'Erro ao salvar usuário. Tente novamente.']
+                ]);
+            }
+        } catch (\Exception $e) {
+            log_message('error', 'Exception in storeRegister: ' . $e->getMessage());
+            return $this->response->setStatusCode(500)->setJSON([
+                'success' => false,
+                'errors' => ['general' => 'Erro ao processar registro. Tente novamente.']
+            ]);
         }
     }
 
@@ -51,7 +94,7 @@ class AuthController extends BaseController
             return redirect()->to('/dashboard');
         }
         
-        if ($this->request->getMethod() === 'post') {
+        if ($this->request->getMethod() === 'POST' || strtoupper($this->request->getMethod()) === 'POST') {
             return $this->storeLogin();
         }
 
@@ -60,33 +103,50 @@ class AuthController extends BaseController
 
     private function storeLogin()
     {
-        $email = $this->request->getPost('email');
-        $password = $this->request->getPost('password');
-        $remember = $this->request->getPost('remember');
+        try {
+            $this->response->setHeader('Content-Type', 'application/json');
 
-        $user = $this->userModel->findByEmail($email);
+            $email = $this->request->getPost('email');
+            $password = $this->request->getPost('password');
+            $remember = $this->request->getPost('remember');
 
-        if (!$user || !$this->userModel->verifyPassword($password, $user['password'])) {
-            return redirect()->back()->withInput()->with('error', 'Email ou senha incorretos.');
+            $user = $this->userModel->findByEmail($email);
+
+            if (!$user || !$this->userModel->verifyPassword($password, $user['password'])) {
+                return $this->response->setStatusCode(401)->setJSON([
+                    'success' => false,
+                    'errors' => ['email' => 'Email ou senha incorretos.']
+                ]);
+            }
+
+            $sessionData = [
+                'user_id'    => $user['id'],
+                'user_name'  => $user['name'],
+                'user_email' => $user['email'],
+                'logged_in'  => true,
+            ];
+            $this->session->set($sessionData);
+
+            if ($remember) {
+                $token = bin2hex(random_bytes(32)); 
+                $this->userModel->update($user['id'], ['remember_token' => $token]);
+
+                $cookieDuration = 3600 * 24 * 30;
+                setcookie('remember_user_token', $token, time() + $cookieDuration, '/');
+            }
+            
+            return $this->response->setStatusCode(200)->setJSON([
+                'success' => true,
+                'message' => 'Bem-vindo(a) ' . $user['name'] . '!',
+                'redirect' => '/dashboard'
+            ]);
+        } catch (\Exception $e) {
+            log_message('error', 'Exception in storeLogin: ' . $e->getMessage());
+            return $this->response->setStatusCode(500)->setJSON([
+                'success' => false,
+                'errors' => ['general' => 'Erro ao processar login. Tente novamente.']
+            ]);
         }
-
-        $sessionData = [
-            'user_id'    => $user['id'],
-            'user_name'  => $user['name'],
-            'user_email' => $user['email'],
-            'logged_in'  => true,
-        ];
-        $this->session->set($sessionData);
-
-        if ($remember) {
-            $token = bin2hex(random_bytes(32)); 
-            $this->userModel->update($user['id'], ['remember_token' => $token]);
-
-            $cookieDuration = 3600 * 24 * 30;
-            setcookie('remember_user_token', $token, time() + $cookieDuration, '/');
-        }
-        
-        return redirect()->to('/dashboard')->with('success', 'Bem-vindo(a) ' . $user['name'] . '!');
     }
 
     public function logout()
