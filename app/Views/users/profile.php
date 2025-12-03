@@ -31,7 +31,7 @@
             <a href="<?= base_url('/user/edit') ?>" class="btn btn-primary fw-600">
                 <i class="bi bi-pencil-square me-2"></i> Editar Perfil
             </a>
-            <a href="<?= base_url('/tasks') ?>" class="btn btn-outline-secondary fw-600">
+            <a href="<?= base_url('/dashboard') ?>" class="btn btn-outline-secondary fw-600">
                 <i class="bi bi-list-check me-2"></i> Voltar às Tarefas
             </a>
         </div>

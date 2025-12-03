@@ -24,7 +24,7 @@
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
                         <a class="nav-link" href="/user/profile">
-                            <i class="bi bi-person me-1"></i><?= isset($user) ? $user['name'] : 'Perfil' ?>
+                            <i class="bi bi-person me-1"></i><?= session()->get('user_name') ?? 'Perfil' ?>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -52,7 +52,7 @@
                     <div class="card-body">
                         <i class="bi bi-list-task text-primary" style="font-size: 2rem;"></i>
                         <h5 class="card-title mt-3">Total de Tarefas</h5>
-                        <p class="card-text display-6 text-primary">0</p>
+                        <p class="card-text display-6 text-primary"><?= $total_tasks ?? 0 ?></p>
                     </div>
                 </div>
             </div>
@@ -61,7 +61,7 @@
                     <div class="card-body">
                         <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
                         <h5 class="card-title mt-3">Concluídas</h5>
-                        <p class="card-text display-6 text-success">0</p>
+                        <p class="card-text display-6 text-success"><?= $tasks_completed ?? 0 ?></p>
                     </div>
                 </div>
             </div>
@@ -70,7 +70,7 @@
                     <div class="card-body">
                         <i class="bi bi-hourglass-split text-warning" style="font-size: 2rem;"></i>
                         <h5 class="card-title mt-3">Pendentes</h5>
-                        <p class="card-text display-6 text-warning">0</p>
+                        <p class="card-text display-6 text-warning"><?= $tasks_pending ?? 0 ?></p>
                     </div>
                 </div>
             </div>

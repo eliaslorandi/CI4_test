@@ -131,4 +131,17 @@ class TaskModel extends Model
     {
         return $this->update($taskId, ['is_completed' => 0]);
     }
+
+    // Métodos de contagem
+    public function countUserTasks(int $userId): int
+    {
+        return $this->where('user_id', $userId)->countAllResults();
+    }
+
+    public function countCompletedTasks(int $userId): int
+    {
+        return $this->where('user_id', $userId)
+            ->where('is_completed', 1)
+            ->countAllResults();
+    }
 }

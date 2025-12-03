@@ -36,6 +36,6 @@ class DashboardController extends Controller
 
         ];
 
-        return view('dashboard/index', $data);
+        return view('dashboard/dashboard', $data);
     }
 }
